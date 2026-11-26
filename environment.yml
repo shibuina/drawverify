@@ -1,0 +1,27 @@
+name: drawverify
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    # Core data / evaluation / testing (CPU-friendly)
+    - numpy>=1.26,<2.3
+    - pyarrow>=15.0
+    - pyyaml>=6.0
+    - pillow>=10.0
+    - opencv-python-headless>=4.9
+    - h5py>=3.10
+    - tqdm>=4.66
+    - pytest>=8.0
+    - scikit-learn>=1.4
+    - lightgbm>=4.0
+    # Validator training & inference (install CUDA-matched torch/torchvision first on GPU machines)
+    - torch>=2.4
+    - torchvision>=0.20
+    - transformers>=4.57
+    - peft>=0.13
+    - accelerate>=0.33
+    - datasets>=2.19
+    - huggingface_hub>=0.25

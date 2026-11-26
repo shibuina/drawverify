@@ -1,0 +1,17 @@
+# Stage 1: Qwen3-VL-2B-Instruct LoRA validator trained on generated prompts (answer-only targets).
+# Corresponds to "Answer-only targets: generated only" in Table 1 of the final report.
+# Used for seeds 0, 1, 2 (default seed: 0).
+model: Qwen/Qwen3-VL-2B-Instruct
+data: shibuina/drawvla-prompt-validation-taskblind
+split: train
+output_dir: output/train/2b-full4-ans-s0
+answer_only: true
+epochs: 2
+batch_size: 4
+grad_accum: 4
+lr: 1.0e-4
+warmup_steps: 30
+lora_rank: 32
+lora_alpha: 64
+lora_dropout: 0.05
+seed: 0

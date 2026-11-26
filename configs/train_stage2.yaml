@@ -1,0 +1,18 @@
+# Stage 2: Continue a stage-1 LoRA adapter on 144 labelled human sketches by other drawers.
+# Corresponds to "+ stage 2" rows in Table 1 of the final report (run with seeds 0, 1, 2).
+# Human sketches have no rationale, so targets are answer-only automatically.
+model: Qwen/Qwen3-VL-2B-Instruct
+data: output/human_train
+split: train
+init_adapter: output/adapters/2b-full4
+output_dir: output/train/2b-full4-hum-s0
+answer_only: false
+epochs: 4
+batch_size: 8
+grad_accum: 1
+lr: 3.0e-5
+warmup_steps: 8
+lora_rank: 32
+lora_alpha: 64
+lora_dropout: 0.05
+seed: 0

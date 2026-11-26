@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DrawVerify demo</title>
+<style>
+  :root { --bg:#FAF7F0; --card:#F1E9DA; --ink:#16233A; --mute:#5A6272; --line:#DDD3C0; --accent:#C2571E; --ok:#2F7D4F; --bad:#B3261E; color-scheme: light; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 16px; color: var(--mute); }
+  #scenes { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
+  #scenes button { flex: none; padding: 0; border: 3px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
+  #scenes button[aria-pressed="true"] { border-color: var(--accent); }
+  #scenes img { display: block; width: 72px; height: 72px; border-radius: 5px; }
+  .cols { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .left { flex: 1 1 380px; min-width: 0; max-width: 500px; }
+  .right { flex: 1 1 380px; min-width: 0; }
+  canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 10px; touch-action: none; cursor: crosshair; background: #ddd; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  button.tool, #check { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  button.tool[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  select, input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); min-width: 0; }
+  #check { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; padding: 10px 18px; }
+  #check:disabled { opacity: .5; cursor: default; }
+  #task { color: var(--mute); font-size: 14px; margin-top: 8px; }
+  .card { background: var(--card); border-radius: 12px; padding: 16px 18px; }
+  #verdict { font-size: 26px; font-weight: 700; margin: 0 0 2px; }
+  #verdict.ok { color: var(--ok); } #verdict.bad { color: var(--bad); }
+  #sub { color: var(--mute); margin: 0 0 14px; min-height: 1.4em; }
+  .model { margin: 12px 0 0; }
+  .model b { font-weight: 600; } .model small { color: var(--mute); display: block; }
+  .bar { position: relative; height: 22px; background: #fff; border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--mute); }
+  .bar.first i { background: var(--accent); }
+  .bar u { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dashed var(--ink); opacity: .5; }
+  .bar span { position: absolute; right: 8px; top: 0; line-height: 22px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  #seen { display: flex; gap: 12px; align-items: flex-start; margin-top: 16px; }
+  #seen img { width: 128px; height: 128px; border-radius: 6px; flex: none; }
+  #seen small, .hint { color: var(--mute); font-size: 14px; }
+  ul.hint { padding-left: 18px; margin: 14px 0 0; }
+</style>
+<main>
+  <h1>DrawVerify demo</h1>
+  <p class="lead">Draw an instruction for the robot. The models say whether it shows exactly one sensible action.</p>
+  <div id="scenes" aria-label="Scenes"></div>
+  <div class="cols">
+    <div class="left">
+      <canvas id="cv" width="768" height="768" aria-label="Scene to draw on"></canvas>
+      <div id="task"></div>
+      <div class="row">
+        <button class="tool" id="mCircle" aria-pressed="true"><span class="dot" style="background:#17A05E"></span>1. Circle the object</button>
+        <button class="tool" id="mArrow" aria-pressed="false"><span class="dot" style="background:#D94949"></span>2. Arrow to the place</button>
+        <button class="tool" id="clear">Clear</button>
+      </div>
+      <div class="row">
+        <label for="cap">Caption</label>
+        <select id="cap"></select>
+        <input type="text" id="custom" placeholder="or type your own" maxlength="80" aria-label="Custom caption">
+      </div>
+      <div class="row"><button id="check" disabled>Check the sketch</button><button class="tool" id="example">Show an example</button><span class="hint" id="status">Draw a circle first.</span></div>
+    </div>
+    <div class="right">
+      <div class="card" aria-live="polite">
+        <p id="verdict">No sketch checked yet</p>
+        <p id="sub">The verdict of the final model appears here.</p>
+        <div id="models"></div>
+        <div id="seen" hidden><img id="seenImg" alt="The sketch as the models saw it"><small id="seenTxt"></small></div>
+      </div>
+      <p class="hint" id="mode"></p>
+      <ul class="hint">
+        <li>Valid: circle one object, draw an arrow to a place it can go, caption "put this there".</li>
+        <li>Also valid: circle one object, no arrow, caption "pick up this".</li>
+        <li>Try to break it: circle two objects, stop the arrow short, or use "pick up this" with an arrow.</li>
+        <li>Each bar is the model's probability that the sketch is wrong; at 50% or more the robot asks for a redraw.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+<script>
+const CAPTIONS = ["put this there", "move this there", "place this there", "put this over there", "do this",
+                  "pick up this", "grab this", "take this", "open this", "close this", "turn this on"];
+const $ = id => document.getElementById(id), cv = $("cv"), ctx = cv.getContext("2d"), N = cv.width;
+const UI = {circle: "#17A05E", arrow: "#D94949", width: 0.008 * N, wing: 3.2, angle: 0.45, anchor: 6};  // libero_sketch/strokes.py UI
+let scene = 0, img = new Image(), mode = "circle", strokes = {circle: null, arrow: null}, cur = null, busy = false;
+
+function line(pts, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = UI.width; ctx.lineCap = ctx.lineJoin = "round";
+  ctx.beginPath(); pts.forEach((p, i) => ctx[i ? "lineTo" : "moveTo"](p[0] * N, p[1] * N)); ctx.stroke();
+}
+function head(pts) {   // the study UI's V head, as in strokes.ui_head
+  const tip = pts[pts.length - 1], from = pts[Math.max(0, pts.length - UI.anchor)];
+  const a = Math.atan2(tip[1] - from[1], tip[0] - from[0]), s = UI.wing * UI.width / N;
+  return [-1, 1].map(k => [tip[0] - s * Math.cos(a + k * UI.angle), tip[1] - s * Math.sin(a + k * UI.angle)]);
+}
+function draw() {
+  ctx.clearRect(0, 0, N, N);
+  if (img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, N, N);
+  const c = mode === "circle" && cur ? cur : strokes.circle, a = mode === "arrow" && cur ? cur : strokes.arrow;
+  if (c && c.length > 1) line(c, UI.circle);
+  if (a && a.length > 1) { line(a, UI.arrow); const w = head(a), tip = a[a.length - 1]; line([w[0], tip, w[1]], UI.arrow); }
+}
+function setMode(m) { mode = m; $("mCircle").setAttribute("aria-pressed", m === "circle"); $("mArrow").setAttribute("aria-pressed", m === "arrow"); }
+function ready() {
+  $("check").disabled = busy || !strokes.circle;
+  if (!busy) $("status").textContent = strokes.circle ? (strokes.arrow ? "Circle and arrow drawn." : "Circle drawn. Add an arrow, or check it as it is.") : "Draw a circle first.";
+}
+function pos(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); cur = [pos(e)]; };
+cv.onpointermove = e => { if (cur) { cur.push(pos(e)); draw(); } };
+cv.onpointerup = cv.onpointercancel = () => {
+  if (!cur) return;
+  if (cur.length >= 2) { strokes[mode] = cur; if (mode === "circle") setMode("arrow"); }
+  cur = null; draw(); ready();
+};
+$("mCircle").onclick = () => setMode("circle");
+$("mArrow").onclick = () => setMode("arrow");
+$("clear").onclick = () => { strokes = {circle: null, arrow: null}; setMode("circle"); draw(); ready(); };
+
+function pick(i, task) {
+  scene = i; strokes = {circle: null, arrow: null}; setMode("circle");
+  document.querySelectorAll("#scenes button").forEach((b, k) => b.setAttribute("aria-pressed", k === i));
+  $("task").textContent = "This scene comes from the task: " + task + ". Any one sensible action is valid.";
+  img = new Image(); img.onload = draw; img.src = "/scene/" + i + ".png"; ready();
+}
+function show(d) {
+  const first = d.results[0], bad = first.p_wrong >= 0.5;
+  $("verdict").textContent = bad ? "Invalid: the robot asks for a redraw" : "Valid: the robot would act";
+  $("verdict").className = bad ? "bad" : "ok";
+  $("sub").textContent = first.label + " gives it " + (100 * first.p_wrong).toFixed(1) + "% chance of being wrong.";
+  $("models").replaceChildren(...d.results.map((r, k) => {
+    const el = document.createElement("div"); el.className = "model";
+    const b = document.createElement("b"); b.textContent = r.label + ": " + (r.p_wrong >= 0.5 ? "invalid" : "valid");
+    const s = document.createElement("small"); s.textContent = r.note;
+    const bar = document.createElement("div"); bar.className = "bar" + (k ? "" : " first");
+    const fill = document.createElement("i"); fill.style.width = (100 * r.p_wrong) + "%";
+    const val = document.createElement("span"); val.textContent = (100 * r.p_wrong).toFixed(1) + "% wrong";
+    bar.append(fill, document.createElement("u"), val); el.append(b, s, bar); return el;
+  }));
+  $("seenImg").src = d.image; $("seen").hidden = false;
+  $("seenTxt").textContent = 'What the models saw: this 256 px image and the caption "' + d.caption + '". Scored in ' + d.seconds + " s.";
+}
+$("check").onclick = async () => {
+  busy = true; ready(); $("status").textContent = "Checking...";
+  try {
+    const caption = $("custom").value.trim() || $("cap").value;
+    const r = await fetch("/api/check", {method: "POST", headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({scene, circle: strokes.circle, arrow: strokes.arrow, caption})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    show(d); busy = false; ready();
+  } catch (e) { busy = false; ready(); $("status").textContent = "Could not check: " + e.message; }
+};
+CAPTIONS.forEach(c => $("cap").add(new Option(c)));
+let SC = [];
+$("example").onclick = () => {   // a valid sketch drawn for you: the bowl onto the plate
+  const s = SC.find(x => x.task.startsWith("pick up the black bowl from table center"));
+  if (!s) return;
+  pick(s.id, s.task);
+  strokes.circle = Array.from({length: 41}, (_, t) => [0.48 + 0.075 * Math.cos(t / 40 * 2 * Math.PI), 0.42 + 0.075 * Math.sin(t / 40 * 2 * Math.PI)]);
+  strokes.arrow = Array.from({length: 26}, (_, t) => [0.56 + 0.21 * t / 25, 0.40 - 0.14 * t / 25]);
+  $("cap").value = "put this there"; $("custom").value = ""; setMode("arrow"); ready(); $("check").click();
+};
+fetch("/api/scenes").then(r => r.json()).then(info => {
+  const list = SC = info.scenes;
+  if (info.bits) $("mode").textContent = "Running a " + info.bits + "-bit copy of the models to fit this computer's graphics card. Scores can differ a little from the full-precision models: " + (info.bits === 8 ? "on 60 human test sketches the final model gave the same verdict on 98%." : "on 150 human test sketches the final model gave the same verdict on 97%, the second model on 87%.");
+  list.forEach(s => {
+    const b = document.createElement("button"), im = document.createElement("img");
+    im.src = "/scene/" + s.id + ".png"; im.alt = s.task; b.title = s.task; b.append(im);
+    b.onclick = () => pick(s.id, s.task); $("scenes").append(b);
+  });
+  if (list.length) pick(0, list[0].task);
+  if (location.hash === "#run-example") $("example").click();   // for a scripted screenshot
+});
+</script>
+</html>

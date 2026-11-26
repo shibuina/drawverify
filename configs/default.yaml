@@ -1,0 +1,69 @@
+# Default config for the DrawVerify prompt generator.
+# All CLI scripts accept --config <file> whose values deep-merge over these.
+
+paths:
+  # LIBERO's config-default dataset location (seeded by setup_env.sh); override with
+  # --data-root / $LIBERO_DATASETS if datasets live elsewhere
+  libero_datasets: third_party/LIBERO/libero/datasets
+  out_root: output             # relative to data_gen/ unless absolute
+
+render:
+  height: 256
+  width: 256
+
+extract:
+  track_stride: 5              # sim-state subsampling for object/EE tracks
+
+circle:
+  radius_scale: 1.12           # clean circle slightly larger than the min enclosing one
+
+# Human-imprecision stroke model (guarded augmentation, paper Sec. V-B). Normalized units.
+# source: human replays recorded study drawings (libero_sketch/assets/human_strokes.json:
+# pointer path + where it sat relative to the clean mark); the parametric keys below are
+# only used with source: parametric (and by stage 02). Colour, width and head are fixed to
+# the study UI's look (strokes.UI) either way.
+imprecision:
+  circle:
+    source: human
+    center_jitter: 0.15        # sigma as fraction of radius
+    radius_lognorm_sigma: 0.18
+    ecc_sigma: 0.15
+    span_min: 0.75             # fraction of full turn
+    span_max: 1.12
+    wobble: 0.06
+  arrow:
+    source: human
+    endpoint_jitter: 0.023     # ~6 px at 256
+    length_sigma: 0.12
+    curvature_sigma: 0.12      # fraction of arrow length
+    shaft_wobble: 0.006
+    head_tolerance: 0.12       # sanity guard: max normalized head drift from clean endpoint
+
+annotate:
+  variants_per_demo: 8         # K sloppy variants per demo
+  arrow_flavor: dest           # dest | motion | both (both stores dest, motion alternates)
+  min_arrow_len: 0.05          # normalized; shorter arrows (knob turns) -> circle-only
+
+captions:
+  provider: none               # gemini | openai | none (templates only)
+  model: null                  # null -> provider default (gemini-2.5-flash / gpt-4o-mini)
+  n_paraphrases: 4             # LLM paraphrases per level per task
+
+# False-prompt / prompt-validation generation (stages 08-09; failure_modes.md).
+false_prompts:
+  # Every caption is name-free/deictic so the sketch must ground "this" and "there".
+  caption_level_mix: {L2: 0.5, L3: 0.5}
+  samples_per_mode: 2          # independent corruptions / hand-drawn renderings per demo
+  # Twelve attempts target roughly 25% verified-right rows while retaining every
+  # corruption example. Attempts that do not resolve uniquely are still moved to grounding.
+  positives_per_demo: 12
+  # Task-blind: attempts per demo at a valid prompt for another sensible place action in the
+  # same scene (false_prompts.PLACE_INTO), e.g. the other bowl onto the plate.
+  alt_positives_per_demo: 6
+  # Circle-only valid prompts with a pick verb ("grab this", "pick up this", "take this"):
+  # picking the object up is a complete action. Half circle the demo's target, half another
+  # clearly visible object. Every other circle-only place prompt stays wrong.
+  pick_positives_per_demo: 2
+  grounding_per_kind: 2       # former under-determined prompts retained as binary wrong
+
+seed: 17

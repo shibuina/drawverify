@@ -1,0 +1,8 @@
+# Validator training and evaluation on a CUDA machine (install torch/torchvision for its CUDA first).
+transformers>=4.57          # Qwen3-VL
+peft>=0.13
+accelerate>=0.33
+datasets>=2.19
+pillow>=10
+torchvision>=0.20
+lightgbm>=4                 # eval/geometry_baseline.py

@@ -1,0 +1,11 @@
+# pipeline deps beyond LIBERO's own requirements (installed by setup_env.sh)
+numpy
+opencv-python
+h5py
+pyarrow
+pillow
+pyyaml
+tqdm
+pytest
+openai>=1.40
+google-genai>=1.0
